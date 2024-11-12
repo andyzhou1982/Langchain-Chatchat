@@ -16,12 +16,13 @@ from typing import List
 
 class MilvusRetriever(VectorStoreRetriever):
     def _get_relevant_documents(
-        self, query: str, *, run_manager: CallbackManagerForRetrieverRun
+        self, query: str, **kwargs
     ) -> List[Document]:
+        expr = kwargs.get("expr", None)
         if self.search_type == "similarity":
-            docs = self.vectorstore.similarity_search(query, **self.search_kwargs)
+            docs = self.vectorstore.similarity_search(query,expr=expr, **self.search_kwargs)
         elif self.search_type == "similarity_score_threshold":
-            docs_and_similarities = self.vectorstore.similarity_search_with_score(query, **self.search_kwargs)
+            docs_and_similarities = self.vectorstore.similarity_search_with_score(query, expr=expr,**self.search_kwargs)
             score_threshold = self.search_kwargs.get("score_threshold", None)
             
             if any(
@@ -47,7 +48,7 @@ class MilvusRetriever(VectorStoreRetriever):
             return docs_and_similarities
         elif self.search_type == "mmr":
             docs = self.vectorstore.max_marginal_relevance_search(
-                query, **self.search_kwargs
+                query, expr=expr,**self.search_kwargs
             )
         else:
             raise ValueError(f"search_type of {self.search_type} not allowed.")
@@ -118,5 +119,5 @@ class MilvusVectorstoreRetrieverService(BaseRetrieverService):
         
         return MilvusVectorstoreRetrieverService(retriever=retriever, top_k=top_k)
 
-    def get_relevant_documents(self, query: str):
-        return self.retriever.get_relevant_documents(query)[: self.top_k]
+    def get_relevant_documents(self, query: str, **kwargs):
+        return self.retriever.get_relevant_documents(query, **kwargs)[: self.top_k]

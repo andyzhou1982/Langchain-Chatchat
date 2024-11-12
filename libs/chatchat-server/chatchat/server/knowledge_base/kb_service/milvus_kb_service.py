@@ -1,4 +1,5 @@
 import os
+import random
 from typing import Dict, List, Optional
 
 from langchain.schema import Document
@@ -58,13 +59,16 @@ class MilvusKBService(KBService):
         return SupportedVSType.MILVUS
 
     def _load_milvus(self):
+        self.milvus_config = Settings.kb_settings.kbs_config.get("milvus")
+        self.milvus_kwargs_config = Settings.kb_settings.kbs_config.get("milvus_kwargs")
         self.milvus = Milvus(
             embedding_function=get_Embeddings(self.embed_model),
             collection_name=self.kb_name,
-            connection_args=Settings.kb_settings.kbs_config.get("milvus"),
-            index_params=Settings.kb_settings.kbs_config.get("milvus_kwargs")["index_params"],
-            search_params=Settings.kb_settings.kbs_config.get("milvus_kwargs")["search_params"],
+            connection_args=self.milvus_config,
+            index_params=self.milvus_kwargs_config["index_params"],
+            search_params=self.milvus_kwargs_config["search_params"],
             auto_id=True,
+            partition_key_field=self.milvus_config["partition_key_field"] if "partition_key_field" in self.milvus_config else None
             )
 
     def do_init(self):
@@ -75,7 +79,12 @@ class MilvusKBService(KBService):
             self.milvus.col.release()
             self.milvus.col.drop()
 
-    def do_search(self, query: str, top_k: int, score_threshold: float):
+    def do_search(self, query: str, top_k: int, score_threshold: float, **kwargs) -> List[Document]:
+        expr = None
+        partition_key_field = self.milvus_config["partition_key_field"] if "partition_key_field" in self.milvus_config else None
+        if partition_key_field:
+            tenant = kwargs.get("tenant")
+            expr= f"{partition_key_field} == '{tenant}'"
         self._load_milvus()
         # embed_func = get_Embeddings(self.embed_model)
         # embeddings = embed_func.embed_query(query)
@@ -85,13 +94,17 @@ class MilvusKBService(KBService):
             top_k=top_k,
             score_threshold=score_threshold,
         )
-        docs = retriever.get_relevant_documents(query)
+        docs = retriever.get_relevant_documents(query,expr=expr)
         return docs
 
     def do_add_doc(self, docs: List[Document], **kwargs) -> List[Dict]:
+        partition_key_field = self.milvus_config["partition_key_field"] if "partition_key_field" in self.milvus_config else None
         for doc in docs:
             for k, v in doc.metadata.items():
                 doc.metadata[k] = str(v)
+            if partition_key_field:
+                tenant = kwargs.get("tenant")
+                doc.metadata[partition_key_field] = tenant
             for field in self.milvus.fields:
                 doc.metadata.setdefault(field, "")
             doc.metadata.pop(self.milvus._text_field, None)

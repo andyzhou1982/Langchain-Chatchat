@@ -65,12 +65,13 @@ def search_docs(
         ),
         file_name: str = Body("", description="文件名称，支持 sql 通配符"),
         metadata: dict = Body({}, description="根据 metadata 进行过滤，仅支持一级键"),
+        tenant: str = Body("", description="租户ID(用于milvus)"),
 ) -> List[Dict]:
     kb = KBServiceFactory.get_service_by_name(knowledge_base_name)
     data = []
     if kb is not None:
         if query:
-            docs = kb.search_docs(query, top_k, score_threshold)
+            docs = kb.search_docs(query, top_k, score_threshold,tenant=tenant)
             # data = [DocumentWithVSId(**x[0].dict(), score=x[1], id=x[0].metadata.get("id")) for x in docs]
             data = [DocumentWithVSId(**{"id": x.metadata.get("id"), **x.dict()}) for x in docs]
         elif file_name or metadata:
@@ -97,19 +98,23 @@ def list_files(knowledge_base_name: str) -> ListResponse:
 
 
 def _save_files_in_thread(
-        files: List[UploadFile], knowledge_base_name: str, override: bool
+        files: List[UploadFile], knowledge_base_name: str, override: bool, tenant: str
 ):
     """
     通过多线程将上传的文件保存到对应知识库目录内。
     生成器返回保存结果：{"code":200, "msg": "xxx", "data": {"knowledge_base_name":"xxx", "file_name": "xxx"}}
     """
 
-    def save_file(file: UploadFile, knowledge_base_name: str, override: bool) -> dict:
+    def complete_filename(filename:str,tenant:str=""):
+        return f"{tenant}__{filename}" if tenant else filename
+
+
+    def save_file(file: UploadFile, knowledge_base_name: str, override: bool, tenant: str) -> dict:
         """
         保存单个文件。
         """
         try:
-            filename = file.filename
+            filename = complete_filename(file.filename,tenant)
             file_path = get_file_path(
                 knowledge_base_name=knowledge_base_name, doc_name=filename
             )
@@ -136,7 +141,7 @@ def _save_files_in_thread(
             return dict(code=500, msg=msg, data=data)
 
     params = [
-        {"file": file, "knowledge_base_name": knowledge_base_name, "override": override}
+        {"file": file, "knowledge_base_name": knowledge_base_name, "override": override, "tenant": tenant}
         for file in files
     ]
     for result in run_in_thread_pool(save_file, params=params):
@@ -168,6 +173,7 @@ def upload_docs(
         zh_title_enhance: bool = Form(Settings.kb_settings.ZH_TITLE_ENHANCE, description="是否开启中文标题加强"),
         docs: str = Form("", description="自定义的docs，需要转为json字符串"),
         not_refresh_vs_cache: bool = Form(False, description="暂不保存向量库（用于FAISS）"),
+        tenant: str = Form("", description="租户ID(用于milvus)"),
 ) -> BaseResponse:
     """
     API接口：上传文件，并/或向量化
@@ -185,7 +191,7 @@ def upload_docs(
 
     # 先将上传的文件保存到磁盘
     for result in _save_files_in_thread(
-            files, knowledge_base_name=knowledge_base_name, override=override
+            files, knowledge_base_name=knowledge_base_name, override=override,tenant=tenant
     ):
         filename = result["data"]["file_name"]
         if result["code"] != 200:
@@ -205,6 +211,7 @@ def upload_docs(
             zh_title_enhance=zh_title_enhance,
             docs=docs,
             not_refresh_vs_cache=True,
+            tenant=tenant,
         )
         failed_files.update(result.data["failed_files"])
         if not not_refresh_vs_cache:
@@ -220,6 +227,7 @@ def delete_docs(
         file_names: List[str] = Body(..., examples=[["file_name.md", "test.txt"]]),
         delete_content: bool = Body(False),
         not_refresh_vs_cache: bool = Body(False, description="暂不保存向量库（用于FAISS）"),
+        tenant: str = Body("", description="租户ID(用于milvus)"),
 ) -> BaseResponse:
     if not validate_kb_name(knowledge_base_name):
         return BaseResponse(code=403, msg="Don't attack me")
@@ -282,6 +290,7 @@ def update_docs(
         override_custom_docs: bool = Body(False, description="是否覆盖之前自定义的docs"),
         docs: str = Body("", description="自定义的docs，需要转为json字符串"),
         not_refresh_vs_cache: bool = Body(False, description="暂不保存向量库（用于FAISS）"),
+        tenant: str = Body("", description="租户ID(用于milvus)"),
 ) -> BaseResponse:
     """
     更新知识库文档
@@ -329,7 +338,7 @@ def update_docs(
                 filename=file_name, knowledge_base_name=knowledge_base_name
             )
             kb_file.splited_docs = new_docs
-            kb.update_doc(kb_file, not_refresh_vs_cache=True)
+            kb.update_doc(kb_file, not_refresh_vs_cache=True, tenant=tenant)
         else:
             kb_name, file_name, error = result
             failed_files[file_name] = error
@@ -417,6 +426,8 @@ def recreate_vector_store(
     def output():
         try:
             kb = KBServiceFactory.get_service_by_name(knowledge_base_name)
+            if kb is None:
+                kb = KBServiceFactory.get_service(knowledge_base_name, vs_type, embed_model)
             if kb is None:
                 kb = KBServiceFactory.get_service(knowledge_base_name, vs_type, embed_model)
             if not kb.exists() and not allow_empty_kb:

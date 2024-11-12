@@ -203,11 +203,12 @@ class KBService(ABC):
         query: str,
         top_k: int = Settings.kb_settings.VECTOR_SEARCH_TOP_K,
         score_threshold: float = Settings.kb_settings.SCORE_THRESHOLD,
+        **kwargs
     ) -> List[Document]:
         if not self.check_embed_model()[0]:
             return []
 
-        docs = self.do_search(query, top_k, score_threshold)
+        docs = self.do_search(query, top_k, score_threshold, **kwargs)
         return docs
 
     def get_doc_by_ids(self, ids: List[str]) -> List[Document]:
@@ -313,6 +314,7 @@ class KBService(ABC):
         query: str,
         top_k: int,
         score_threshold: float,
+        **kwargs,
     ) -> List[Tuple[Document, float]]:
         """
         搜索知识库子类实自己逻辑
