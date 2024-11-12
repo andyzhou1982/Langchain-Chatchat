@@ -59,6 +59,7 @@ async def kb_chat(query: str = Body(..., description="用户输入", examples=["
                 ),
                 return_direct: bool = Body(False, description="直接返回检索结果，不送入 LLM"),
                 request: Request = None,
+                tenant: str = Body("", description="租户ID(用于milvus)"),
                 ):
     if mode == "local_kb":
         kb = KBServiceFactory.get_service_by_name(kb_name)
@@ -82,7 +83,8 @@ async def kb_chat(query: str = Body(..., description="用户输入", examples=["
                                                 top_k=top_k,
                                                 score_threshold=score_threshold,
                                                 file_name="",
-                                                metadata={})
+                                                metadata={},
+                                                tenant=tenant)
                 source_documents = format_reference(kb_name, docs, api_address(is_public=True))
             elif mode == "temp_kb":
                 ok, msg = check_embed_model()

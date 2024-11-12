@@ -90,7 +90,7 @@ class RelytKBService(KBService):
             with conn.begin():
                 conn.execute(drop_statement)
 
-    def do_search(self, query: str, top_k: int, score_threshold: float):
+    def do_search(self, query: str, top_k: int, score_threshold: float,**kwargs):
         docs = self.relyt.similarity_search_with_score(query, top_k)
         return score_threshold_process(score_threshold, top_k, docs)
 

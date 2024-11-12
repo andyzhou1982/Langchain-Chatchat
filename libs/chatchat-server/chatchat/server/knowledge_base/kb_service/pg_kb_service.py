@@ -75,7 +75,7 @@ class PGKBService(KBService):
             session.commit()
             shutil.rmtree(self.kb_path)
 
-    def do_search(self, query: str, top_k: int, score_threshold: float):
+    def do_search(self, query: str, top_k: int, score_threshold: float,**kwargs):
         retriever = get_Retriever("vectorstore").from_vectorstore(
             self.pg_vector,
             top_k=top_k,

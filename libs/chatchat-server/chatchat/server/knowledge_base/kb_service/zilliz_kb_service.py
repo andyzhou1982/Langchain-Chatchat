@@ -69,7 +69,7 @@ class ZillizKBService(KBService):
             self.zilliz.col.release()
             self.zilliz.col.drop()
 
-    def do_search(self, query: str, top_k: int, score_threshold: float):
+    def do_search(self, query: str, top_k: int, score_threshold: float,**kwargs):
         self._load_zilliz()
         retriever = get_Retriever("vectorstore").from_vectorstore(
             self.zilliz,

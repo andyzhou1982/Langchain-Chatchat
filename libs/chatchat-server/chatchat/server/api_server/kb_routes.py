@@ -62,6 +62,7 @@ async def kb_chat_endpoint(
         prompt_name=extra.get("prompt_name", "default"),
         return_direct=extra.get("return_direct", False),
         request=request,
+        tenant="",
     )
     return ret
 

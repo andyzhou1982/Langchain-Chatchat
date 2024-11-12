@@ -27,6 +27,7 @@ def search_knowledgebase(query: str, database: str, config: dict):
         score_threshold=config["score_threshold"],
         file_name="",
         metadata={},
+        tenant=""
     )
     return {"knowledge_base": database, "docs": docs}
 

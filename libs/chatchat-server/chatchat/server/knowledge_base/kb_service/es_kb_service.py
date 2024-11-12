@@ -133,7 +133,7 @@ class ESKBService(KBService):
     def vs_type(self) -> str:
         return SupportedVSType.ES
 
-    def do_search(self, query: str, top_k: int, score_threshold: float):
+    def do_search(self, query: str, top_k: int, score_threshold: float,**kwargs):
         # 文本相似性检索
         retriever = get_Retriever("vectorstore").from_vectorstore(
             self.db,
